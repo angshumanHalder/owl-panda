@@ -2,6 +2,7 @@
 // 1. Balanced tags (<p></p>)
 // 2. Attributes quoted  values: id="root"
 // 3. Text nodes: <em>Hello</em>
+// Comments of type <!-- .. --> (the comment text cannot have '-')
 
 use std::{char, collections::HashMap};
 
@@ -24,11 +25,15 @@ impl Parser {
     }
 
     // If the exact string `s` is found at the current position consume it.
-    fn expect(&mut self, s: &str) {
+    fn expect(&mut self, s: &str) -> Result<(), String> {
         if self.starts_with(s) {
             self.pos += s.len();
+            Ok(())
         } else {
-            panic!("Expected {:?} at byte {} but it was not found", s, self.pos)
+            Err(format!(
+                "Expected {:?} at byte {} but it was not found",
+                s, self.pos
+            ))
         }
     }
 
@@ -64,11 +69,11 @@ impl Parser {
     }
 
     // Parse a single node
-    fn parse_node(&mut self) -> dom::Node {
+    fn parse_node(&mut self) -> Option<dom::Node> {
         if self.starts_with("<") {
             self.parse_element()
         } else {
-            self.parse_text()
+            Some(self.parse_text())
         }
     }
 
@@ -79,9 +84,12 @@ impl Parser {
 
     // Parse a single element (opening tag, contents & closing tag)
     // Parse comment only when <!-- .. -->
-    fn parse_element(&mut self) -> dom::Node {
+    fn parse_element(&mut self) -> Option<dom::Node> {
         // Opening tag
-        self.expect("<");
+        match self.expect("<") {
+            Ok(()) => (),
+            Err(_) => return None,
+        }
 
         // determine whether it is a comment or a node
         if self.starts_with("!--") {
@@ -90,17 +98,22 @@ impl Parser {
 
         let tag_name = self.parse_name();
         let attrs = self.parse_attributes();
-        self.expect(">");
+
+        match self.expect(">") {
+            Ok(()) => (),
+            Err(_) => return None,
+        }
 
         // contents
         let children = self.parse_nodes();
 
         // Closing tag
-        self.expect("</");
-        self.expect(&tag_name);
-        self.expect(">");
+        match self.expect(&format!("</{tag_name}>")) {
+            Ok(()) => (),
+            Err(_) => return None,
+        }
 
-        dom::elem(tag_name, attrs, children)
+        Some(dom::elem(tag_name, attrs, children))
     }
 
     // Parse Attributes - list of name="value" separated by whitespace
@@ -111,18 +124,22 @@ impl Parser {
             if self.next_char() == '>' {
                 break;
             }
-            let (name, value) = self.parse_attr();
-            attributes.insert(name, value);
+            if let Some((name, value)) = self.parse_attr() {
+                attributes.insert(name, value);
+            };
         }
         attributes
     }
 
     // Parse name="value" attribute.
-    fn parse_attr(&mut self) -> (String, String) {
+    fn parse_attr(&mut self) -> Option<(String, String)> {
         let name = self.parse_name();
-        self.expect("=");
+        match self.expect("=") {
+            Ok(()) => (),
+            Err(_) => return None,
+        }
         let value = self.parse_attr_value();
-        (name, value)
+        Some((name, value))
     }
 
     // Parse a "value"
@@ -143,18 +160,28 @@ impl Parser {
             if self.eof() || self.starts_with("</") {
                 break;
             }
-            let node = self.parse_node();
-            nodes.push(node);
+            if let Some(node) = self.parse_node() {
+                nodes.push(node);
+            }
         }
         nodes
     }
 
     // Parse parse comment
-    fn parse_comment(&mut self) -> dom::Node {
-        self.expect("!--");
+    fn parse_comment(&mut self) -> Option<dom::Node> {
+        match self.expect("!--") {
+            Ok(()) => (),
+            Err(_) => return None,
+        }
+
         let text = self.consume_while(|c| c != '-');
-        self.expect("-->");
-        dom::comment(text)
+
+        match self.expect("-->") {
+            Ok(()) => (),
+            Err(_) => return None,
+        }
+
+        Some(dom::comment(text))
     }
 }
 
