@@ -2,7 +2,7 @@
 // 1. Balanced tags (<p></p>)
 // 2. Attributes quoted  values: id="root"
 // 3. Text nodes: <em>Hello</em>
-// Comments of type <!-- .. --> (the comment text cannot have '-')
+// 4. Comments of type <!-- .. --> (the comment text cannot have '-')
 
 use std::{char, collections::HashMap};
 
