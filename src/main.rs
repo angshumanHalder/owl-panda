@@ -3,6 +3,7 @@ use std::fs;
 mod css;
 mod dom;
 mod html;
+mod style;
 
 fn main() {
     let html = read_source(String::from("files/test.html"));

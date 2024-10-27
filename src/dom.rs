@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Node {
@@ -43,5 +43,18 @@ pub fn comment(data: String) -> Node {
     Node {
         children: Vec::new(),
         node_type: NodeType::Comment(data),
+    }
+}
+
+impl ElementData {
+    pub fn id(&self) -> Option<&String> {
+        self.attrs.get("id")
+    }
+
+    pub fn classes(&self) -> HashSet<&str> {
+        match self.attrs.get("class") {
+            Some(classes) => classes.split(" ").collect(),
+            None => HashSet::new(),
+        }
     }
 }
