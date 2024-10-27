@@ -4,50 +4,58 @@
 // 3. Any number of class names prefixed by .
 // 4. Some combination of the above 3
 
-struct StylesSheet {
-    rules: Vec<Rule>,
+#[derive(Debug)]
+pub struct StylesSheet {
+    pub rules: Vec<Rule>,
 }
 
-struct Rule {
-    selectors: Vec<Selector>,
-    declarations: Vec<Declaration>,
+#[derive(Debug)]
+pub struct Rule {
+    pub selectors: Vec<Selector>,
+    pub declarations: Vec<Declaration>,
 }
 
-enum Selector {
+#[derive(Debug)]
+pub enum Selector {
     Simple(SimpleSelector),
 }
 
 // Cannot be enum because it can be a combination of all the 3 fields on a html tag
-struct SimpleSelector {
-    tag_name: Option<String>,
-    id: Option<String>,
-    class: Vec<String>,
+#[derive(Debug)]
+pub struct SimpleSelector {
+    pub tag_name: Option<String>,
+    pub id: Option<String>,
+    pub class: Vec<String>,
 }
 
 // Key value pair separated by :
-struct Declaration {
-    key: String,
-    value: Value,
+#[derive(Debug)]
+pub struct Declaration {
+    pub name: String,
+    pub value: Value,
 }
 
 // Supports only a subset of css value types. Later add more value types
-enum Value {
+#[derive(Debug)]
+pub enum Value {
     Color(ColorRGBA),
     Keyword(String),
     Length(f32, Unit),
 }
 
 // Add more units
-enum Unit {
+#[derive(Debug)]
+pub enum Unit {
     Px,
 }
 
 // Supports rgba only for now.
-struct ColorRGBA {
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
+#[derive(Debug)]
+pub struct ColorRGBA {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
 }
 
 struct Parser {
@@ -55,7 +63,60 @@ struct Parser {
     input: String,
 }
 
+pub type Specificity = (usize, usize, usize);
+
+fn valid_identifier_char(c: char) -> bool {
+    matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_')
+}
+
 impl Parser {
+    // Read the next character without consuming it.
+    fn next_char(&self) -> char {
+        self.input[self.pos..].chars().next().unwrap()
+    }
+
+    // consume the character in current position & advance position
+    fn consume_char(&mut self) -> char {
+        let c = self.next_char();
+        self.pos += c.len_utf8();
+        c
+    }
+
+    // consume character until 'test' return results
+    fn consume_while(&mut self, test: impl Fn(char) -> bool) -> String {
+        let mut result = String::new();
+        while !self.eof() && test(self.next_char()) {
+            result.push(self.consume_char());
+        }
+        result
+    }
+
+    // Parse a property name or keyword
+    fn parse_identfier(&mut self) -> String {
+        self.consume_while(valid_identifier_char)
+    }
+
+    // return true if all input is consumed
+    fn eof(&self) -> bool {
+        self.pos >= self.input.len()
+    }
+
+    // consume & discard zero / more whitespace chars
+    fn consume_whitespace(&mut self) {
+        self.consume_while(char::is_whitespace);
+    }
+
+    // If the next character matches the consume it.
+    fn expect_char(&mut self, c: char) -> Result<(), String> {
+        if self.consume_char() != c {
+            return Err(format!(
+                "Expected {:?} at byte {} but it was not found",
+                c, self.pos
+            ));
+        }
+        Ok(())
+    }
+
     // Parse a single simple selector, eg: `type#id.class1.class2.class3`
     // Some malformed input like ### or *foo* will parse successfully and produce weird results
     fn parse_simple_selector(&mut self) -> SimpleSelector {
@@ -64,10 +125,183 @@ impl Parser {
             id: None,
             class: Vec::new(),
         };
-        todo!()
+        while !self.eof() {
+            match self.next_char() {
+                '#' => {
+                    self.consume_char();
+                    selector.id = Some(self.parse_identfier());
+                }
+                '.' => {
+                    self.consume_char();
+                    selector.class.push(self.parse_identfier());
+                }
+                '*' => {
+                    // universal selector
+                    self.consume_char();
+                }
+                c if valid_identifier_char(c) => {
+                    selector.tag_name = Some(self.parse_identfier());
+                }
+                _ => break,
+            }
+        }
+        selector
     }
 
-    fn eof(&self) -> bool {
-        self.pos >= self.input.len()
+    fn parse_rules(&mut self) -> Vec<Rule> {
+        let mut rules = Vec::new();
+        loop {
+            self.consume_whitespace();
+            if self.eof() {
+                break;
+            }
+            if let Some(rule) = self.parse_rule() {
+                rules.push(rule);
+            }
+        }
+        rules
+    }
+
+    // Parse a rule set: `<selectors> { declarations }`
+    fn parse_rule(&mut self) -> Option<Rule> {
+        if let (Some(s), Some(d)) = (self.parse_selectors(), self.parse_declaractions()) {
+            Some(Rule {
+                selectors: s,
+                declarations: d,
+            })
+        } else {
+            None
+        }
+    }
+
+    // Parse comma separated selectors
+    fn parse_selectors(&mut self) -> Option<Vec<Selector>> {
+        let mut selectors = Vec::new();
+        loop {
+            selectors.push(Selector::Simple(self.parse_simple_selector()));
+            self.consume_whitespace();
+            match self.next_char() {
+                ',' => {
+                    self.consume_char();
+                    self.consume_whitespace();
+                }
+                '{' => break,
+                c => {
+                    println!("Unexpected character {} in selector list", c);
+                    return None;
+                }
+            }
+        }
+
+        // Return selectors with highest specificity first, for use in matching.
+        selectors.sort_by_key(|k| k.specificity());
+        Some(selectors)
+    }
+
+    // Parse declarations enclosed in {...}
+    fn parse_declaractions(&mut self) -> Option<Vec<Declaration>> {
+        if let Err(e) = self.expect_char('{') {
+            println!("Expected '{{' at position {}: \n Error: {}", self.pos, e);
+            return None;
+        }
+        let mut declarations = Vec::new();
+        loop {
+            self.consume_whitespace();
+            if self.next_char() == '}' {
+                self.consume_char();
+                break;
+            }
+            if let Some(d) = self.parse_declaraction() {
+                declarations.push(d);
+            }
+        }
+        Some(declarations)
+    }
+
+    // Parse a single declaration '<property>: value'.
+    fn parse_declaraction(&mut self) -> Option<Declaration> {
+        let name = self.parse_identfier();
+        self.consume_whitespace();
+        if let Err(e) = self.expect_char(':') {
+            println!("Expected ':' at {}: \n Error: {}", self.pos, e);
+            return None;
+        };
+        self.consume_whitespace();
+        let value = self.parse_value();
+        if let Some(value) = value {
+            self.consume_whitespace();
+            if let Err(e) = self.expect_char(';') {
+                println!("{}", e);
+            };
+            return Some(Declaration { name, value });
+        }
+        None
+    }
+
+    // methods to parse a value
+    fn parse_value(&mut self) -> Option<Value> {
+        match self.next_char() {
+            '0'..='9' => self.parse_length(),
+            '#' => self.parse_color(),
+            _ => Some(Value::Keyword(self.parse_identfier())),
+        }
+    }
+
+    fn parse_length(&mut self) -> Option<Value> {
+        self.parse_unit()
+            .map(|u| Value::Length(self.parse_float(), u))
+    }
+
+    fn parse_float(&mut self) -> f32 {
+        self.consume_while(|a| matches!(a, '0'..='9' | '.'))
+            .parse()
+            .unwrap()
+    }
+
+    fn parse_unit(&mut self) -> Option<Unit> {
+        match &*self.parse_identfier().to_ascii_lowercase() {
+            "px" => Some(Unit::Px),
+            _ => None,
+        }
+    }
+
+    fn parse_color(&mut self) -> Option<Value> {
+        if let Err(e) = self.expect_char('#') {
+            println!("Invalid color input: {}", e);
+            self.consume_while(|c| c == ';');
+            return None;
+        };
+        Some(Value::Color(ColorRGBA {
+            r: self.parse_hex_pair(),
+            g: self.parse_hex_pair(),
+            b: self.parse_hex_pair(),
+            a: 255,
+        }))
+    }
+
+    fn parse_hex_pair(&mut self) -> u8 {
+        let s = &self.input[self.pos..self.pos + 2];
+        self.pos += 2;
+        u8::from_str_radix(s, 16).unwrap()
+    }
+}
+
+impl Selector {
+    pub fn specificity(&self) -> Specificity {
+        let Selector::Simple(ref simple) = *self;
+        let a = simple.id.iter().count();
+        let b = simple.class.len();
+        let c = simple.tag_name.iter().count();
+        (a, b, c)
+    }
+}
+
+pub fn parse(source: String) -> StylesSheet {
+    let mut parser = Parser {
+        pos: 0,
+        input: source,
+    };
+    StylesSheet {
+        rules: parser.parse_rules(),
     }
 }
