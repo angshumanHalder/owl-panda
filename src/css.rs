@@ -7,17 +7,25 @@
 #[derive(Debug)]
 pub struct StylesSheet {
     pub rules: Vec<Rule>,
+    pub origin: CSSOrigin,
 }
 
 #[derive(Debug)]
 pub struct Rule {
     pub selectors: Vec<Selector>,
     pub declarations: Vec<Declaration>,
+    pub origin: CSSOrigin,
 }
 
 #[derive(Debug)]
 pub enum Selector {
     Simple(SimpleSelector),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CSSOrigin {
+    Author,
+    User,
 }
 
 // Cannot be enum because it can be a combination of all the 3 fields on a html tag
@@ -29,14 +37,16 @@ pub struct SimpleSelector {
 }
 
 // Key value pair separated by :
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Declaration {
     pub name: String,
     pub value: Value,
+    pub origin: CSSOrigin,
+    pub is_important: bool,
 }
 
 // Supports only a subset of css value types. Later add more value types
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Color(ColorRGBA),
     Keyword(String),
@@ -44,13 +54,15 @@ pub enum Value {
 }
 
 // Add more units
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Unit {
     Px,
+    Em,
+    Rem,
 }
 
 // Supports rgba only for now.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct ColorRGBA {
     pub r: u8,
     pub g: u8,
@@ -110,11 +122,26 @@ impl Parser {
     fn expect_char(&mut self, c: char) -> Result<(), String> {
         if self.consume_char() != c {
             return Err(format!(
-                "Expected {:?} at byte {} but it was not found",
+                "fn expect_char: Expected {:?} at byte {} but it was not found",
                 c, self.pos
             ));
         }
         Ok(())
+    }
+
+    // Do the next character starts with the given string?
+    fn starts_with(&self, s: &str) -> bool {
+        self.input[self.pos..].starts_with(s)
+    }
+
+    // If the exact string `s` is found at the current position consume it.
+    fn expect(&mut self, s: &str) -> bool {
+        if self.starts_with(s) {
+            self.pos += s.len();
+            true
+        } else {
+            false
+        }
     }
 
     // Parse a single simple selector, eg: `type#id.class1.class2.class3`
@@ -148,14 +175,14 @@ impl Parser {
         selector
     }
 
-    fn parse_rules(&mut self) -> Vec<Rule> {
+    fn parse_rules(&mut self, origin: CSSOrigin) -> Vec<Rule> {
         let mut rules = Vec::new();
         loop {
             self.consume_whitespace();
             if self.eof() {
                 break;
             }
-            if let Some(rule) = self.parse_rule() {
+            if let Some(rule) = self.parse_rule(origin) {
                 rules.push(rule);
             }
         }
@@ -163,11 +190,12 @@ impl Parser {
     }
 
     // Parse a rule set: `<selectors> { declarations }`
-    fn parse_rule(&mut self) -> Option<Rule> {
-        if let (Some(s), Some(d)) = (self.parse_selectors(), self.parse_declaractions()) {
+    fn parse_rule(&mut self, origin: CSSOrigin) -> Option<Rule> {
+        if let (Some(s), Some(d)) = (self.parse_selectors(), self.parse_declarations(origin)) {
             Some(Rule {
                 selectors: s,
                 declarations: d,
+                origin,
             })
         } else {
             None
@@ -199,9 +227,12 @@ impl Parser {
     }
 
     // Parse declarations enclosed in {...}
-    fn parse_declaractions(&mut self) -> Option<Vec<Declaration>> {
+    fn parse_declarations(&mut self, origin: CSSOrigin) -> Option<Vec<Declaration>> {
         if let Err(e) = self.expect_char('{') {
-            println!("Expected '{{' at position {}: \n Error: {}", self.pos, e);
+            println!(
+                "fn parse_declaractions: Expected '{{' at position {}: \n Error: {}",
+                self.pos, e
+            );
             return None;
         }
         let mut declarations = Vec::new();
@@ -211,29 +242,55 @@ impl Parser {
                 self.consume_char();
                 break;
             }
-            if let Some(d) = self.parse_declaraction() {
+            if let Some(d) = self.parse_declaraction(origin) {
                 declarations.push(d);
+            } else {
+                // If parsing failed skip to the next semicolor or brace
+                self.consume_while(|c| c != ';' && c != '}');
+                if !self.eof() && self.next_char() == ';' {
+                    self.consume_char();
+                }
             }
         }
         Some(declarations)
     }
 
     // Parse a single declaration '<property>: value'.
-    fn parse_declaraction(&mut self) -> Option<Declaration> {
+    fn parse_declaraction(&mut self, origin: CSSOrigin) -> Option<Declaration> {
         let name = self.parse_identfier();
         self.consume_whitespace();
+
         if let Err(e) = self.expect_char(':') {
-            println!("Expected ':' at {}: \n Error: {}", self.pos, e);
+            println!("fn parse_declaraction: Error: {}", e);
             return None;
         };
+
         self.consume_whitespace();
+
         let value = self.parse_value();
+
         if let Some(value) = value {
+            let mut dec = Declaration {
+                name,
+                origin,
+                value,
+                is_important: false,
+            };
+
             self.consume_whitespace();
+
+            // check if important
+            if self.expect("!important") {
+                dec.is_important = true;
+            }
+
+            self.consume_whitespace();
+
             if let Err(e) = self.expect_char(';') {
                 println!("{}", e);
+                return None;
             };
-            return Some(Declaration { name, value });
+            return Some(dec);
         }
         None
     }
@@ -261,13 +318,15 @@ impl Parser {
     fn parse_unit(&mut self) -> Option<Unit> {
         match &*self.parse_identfier().to_ascii_lowercase() {
             "px" => Some(Unit::Px),
+            "em" => Some(Unit::Em),
+            "rem" => Some(Unit::Rem),
             _ => None,
         }
     }
 
     fn parse_color(&mut self) -> Option<Value> {
         if let Err(e) = self.expect_char('#') {
-            println!("Invalid color input: {}", e);
+            println!("fn parse_color: Invalid color input: {}", e);
             self.consume_while(|c| c == ';');
             return None;
         };
@@ -296,12 +355,13 @@ impl Selector {
     }
 }
 
-pub fn parse(source: String) -> StylesSheet {
+pub fn parse(source: String, origin: CSSOrigin) -> StylesSheet {
     let mut parser = Parser {
         pos: 0,
         input: source,
     };
     StylesSheet {
-        rules: parser.parse_rules(),
+        rules: parser.parse_rules(origin),
+        origin,
     }
 }
