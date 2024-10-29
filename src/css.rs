@@ -305,8 +305,8 @@ impl Parser {
     }
 
     fn parse_length(&mut self) -> Option<Value> {
-        self.parse_unit()
-            .map(|u| Value::Length(self.parse_float(), u))
+        let f = self.parse_float();
+        self.parse_unit().map(|u| Value::Length(f, u))
     }
 
     fn parse_float(&mut self) -> f32 {
