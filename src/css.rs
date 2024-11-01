@@ -3,6 +3,53 @@
 // 2. Id with prefixed by #
 // 3. Any number of class names prefixed by .
 // 4. Some combination of the above 3
+//
+
+use phf::phf_map;
+
+pub const INHERITED_PROPERTY: phf::Map<&'static str, bool> = phf_map! {
+    "azimuth" => true,
+    "border-collapse" => true,
+    "border-spacing" => true,
+    "caption-side" => true,
+    "color" => true,
+    "cursor" => true,
+    "direction" => true,
+    "elevation" => true,
+    "empty-cells" => true,
+    "font-family" => true,
+    "font-size" => true,
+    "font-style" => true,
+    "font-variant" => true,
+    "font-weight" => true,
+    "font" => true,
+    "letter-spacing" => true,
+    "line-height" => true,
+    "list-style-image" => true,
+    "list-style-position" => true,
+    "list-style-type" => true,
+    "list-style" => true,
+    "orphans" => true,
+    "pitch-range" => true,
+    "pitch" => true,
+    "quotes" => true,
+    "richness" => true,
+    "speak-header" => true,
+    "speak-numeral" => true,
+    "speak-punctuation" => true,
+    "speak" => true,
+    "speech-rate" => true,
+    "stress" => true,
+    "text-align" => true,
+    "text-indent" => true,
+    "text-transform" => true,
+    "visibility" => true,
+    "voice-family" => true,
+    "volume" => true,
+    "white-space" => true,
+    "widows" => true,
+    "word-spacing" => true,
+};
 
 #[derive(Debug)]
 pub struct StylesSheet {
