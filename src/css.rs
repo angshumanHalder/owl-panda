@@ -402,6 +402,16 @@ impl Selector {
     }
 }
 
+impl Value {
+    pub fn to_px(&self) -> f32 {
+        match *self {
+            Value::Length(f, Unit::Px) => f,
+            // TODO: to convert other units implement inheritance
+            _ => 0.0,
+        }
+    }
+}
+
 pub fn parse(source: String, origin: CSSOrigin) -> StylesSheet {
     let mut parser = Parser {
         pos: 0,

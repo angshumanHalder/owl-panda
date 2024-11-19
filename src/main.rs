@@ -3,6 +3,7 @@ use std::fs;
 mod css;
 mod dom;
 mod html;
+mod layout;
 mod style;
 
 fn main() {

@@ -1,11 +1,10 @@
 // Stitches css node and html node to generate a style node that will make up the style tree
 // Single node in the dom tree has a single node in the style tree (not to be confused with css tree)
 // TODO: Things that need to be included -
-// 1. Cascading
-// 2. Initial and/or computed values (Implementing this would require separate code for each
+// 1. Initial and/or computed values (Implementing this would require separate code for each
 //    property, based on its css specs).
-// 3. Inheritance
-// 4. The style attribute
+// 2. Inheritance
+// 3. The style attribute
 
 use std::{cmp::Ordering, collections::HashMap};
 
@@ -23,9 +22,42 @@ type PropertyMap = HashMap<String, Value>;
 // Node associated with style data
 #[derive(Debug)]
 pub struct StyledNode<'a> {
-    node: &'a Node,
-    specified_values: PropertyMap,
-    children: Vec<StyledNode<'a>>,
+    pub node: &'a Node,
+    pub specified_values: PropertyMap,
+    pub children: Vec<StyledNode<'a>>,
+}
+
+#[derive(PartialEq)]
+pub enum Display {
+    Block,
+    Inline,
+    None,
+}
+
+impl<'a> StyledNode<'a> {
+    // Returns specified value if exist / None
+    pub fn value(&self, name: &str) -> Option<Value> {
+        self.specified_values.get(name).cloned()
+    }
+
+    // Returns specified value of property `name` or property `fallback_name`
+    // or default value
+    pub fn lookup(&self, name: &str, fallback_name: &str, default: &Value) -> Value {
+        self.value(name)
+            .unwrap_or_else(|| self.value(fallback_name).unwrap_or_else(|| default.clone()))
+    }
+
+    // Value of display property / Default display property to inline
+    pub fn display(&self) -> Display {
+        match self.value("display") {
+            Some(Value::Keyword(s)) => match &*s {
+                "block" => Display::Block,
+                "none" => Display::None,
+                _ => Display::Inline,
+            },
+            _ => Display::Inline,
+        }
+    }
 }
 
 /// single CSS rule and the specificity of its most specific matching selector.
