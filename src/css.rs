@@ -117,6 +117,8 @@ pub struct ColorRGBA {
     pub a: u8,
 }
 
+impl Copy for ColorRGBA {}
+
 struct Parser {
     pos: usize,
     input: String,
