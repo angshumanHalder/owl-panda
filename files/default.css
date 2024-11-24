@@ -88,28 +88,15 @@ body {
 }
 
 h1 {
-  font-size: 2em;
-  margin-top: 0.67em;
-  margin-bottom: 0.67em;
   margin-left: 0px;
   margin-right: 0px;
 }
 
 h2 {
-  font-size: 1.5em;
-  margin-top: 0.75em;
-  margin-bottom: 0.75em;
   margin-left: 0px;
   margin-right: 0px;
 }
 
-h3 {
-  font-size: 1.17em;
-  margin-top: 0.83em;
-  margin-bottom: 0.83em;
-  margin-left: 0px;
-  margin-right: 0px;
-}
 
 h4,
 p,
@@ -121,28 +108,10 @@ ol,
 dl,
 dir,
 menu {
-  margin-top: 1.12em;
-  margin-bottom: 1.12em;
-  margin-left: 0;
-  margin-right: 0;
+  margin-left: 0px;
+  margin-right: 0px;
 }
 
-h5 {
-  font-size: 0.83em;
-  margin-top: 1.5em;
-  margin-bottom: 1.5em;
-  margin-left: 0;
-  margin-right: 0;
-}
-
-h6 {
-  font-size: 0.75em;
-  margin-top: 1.67em;
-  margin-bottom: 1.67em;
-  margin-left: 0;
-  margin-right: 0;
-
-}
 
 h1,
 h2,
@@ -187,15 +156,6 @@ select {
   display: inline-block;
 }
 
-big {
-  font-size: 1.17em;
-}
-
-small,
-sub,
-sup {
-  font-size: 0.83em;
-}
 
 sub {
   vertical-align: sub;
@@ -228,7 +188,7 @@ del {
 }
 
 hr {
-  border: 1px inset;
+  border: 1px;
 }
 
 ol,
